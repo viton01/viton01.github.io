@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Tour Virtual 3D - Arquitetura</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+
+        /* Loading Screen */
+        #loading-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #1a1a1a;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.5s ease;
+        }
+        .spinner {
+            width: 50px; height: 50px;
+            border: 5px solid #333;
+            border-top: 5px solid #fff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* TELA INICIAL (Boas-vindas) */
+        #start-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.4); /* Fundo escurecido translúcido */
+            backdrop-filter: blur(10px); /* Efeito embaçado no projeto 3D */
+            -webkit-backdrop-filter: blur(10px); /* Suporte para Safari */
+            display: none; /* Só aparece após o loading */
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+
+        .welcome-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            max-width: 90%;
+            width: 350px;
+            z-index: 51;
+        }
+
+        .welcome-card img {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%; /* Deixa a logo redonda */
+            object-fit: cover;
+            margin-bottom: 20px;
+            border: 1px solid #eaeaea;
+        }
+
+        .welcome-card h1 {
+            color: #1a1a1a;
+            margin: 0 0 5px 0;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .welcome-card p {
+            color: #666;
+            margin: 0 0 30px 0;
+            font-size: 15px;
+        }
+
+        .start-btn {
+            background: #1a1a1a;
+            color: #fff;
+            border: none;
+            padding: 16px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .start-btn:hover {
+            background: #333;
+            transform: translateY(-2px);
+        }
+
+        /* Crosshair (Mira) */
+        #crosshair {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 8px; height: 8px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 10;
+            display: none;
+        }
+
+        /* Interface (HUD) */
+        #hud {
+            position: absolute;
+            bottom: 20px; left: 20px;
+            color: rgba(255, 255, 255, 0.9);
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 10;
+            font-size: 13px;
+            line-height: 1.6;
+            display: none;
+        }
+        
+        .interaction-prompt {
+            position: absolute;
+            top: 60%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: none;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* Controles Mobile */
+        #mobile-controls {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 20;
+            pointer-events: none;
+        }
+        .touch-zone {
+            position: absolute;
+            top: 0; height: 100%;
+            pointer-events: auto;
+        }
+        #zone-left { left: 0; width: 50%; }
+        #zone-right { right: 0; width: 50%; }
+        
+        #joystick-base {
+            position: absolute;
+            bottom: 40px; left: 40px;
+            width: 100px; height: 100px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            display: none;
+            pointer-events: none;
+        }
+        #joystick-stick {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 40px; height: 40px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+        
+        /* Botões Mobile */
+        #btn-interact-mobile {
+            position: absolute;
+            bottom: 40px; right: 40px;
+            width: 70px; height: 70px;
+            background: rgba(26, 26, 26, 0.6);
+            border: 2px solid #fff;
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+        #btn-interact-mobile:active { background: rgba(26, 26, 26, 0.9); }
+
+        #btn-jump-mobile {
+            position: absolute;
+            bottom: 130px; right: 40px;
+            width: 60px; height: 60px;
+            background: rgba(100, 100, 100, 0.6);
+            border: 2px solid #fff;
+            color: white;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+        }
+        #btn-jump-mobile:active { background: rgba(100, 100, 100, 0.9); }
+    </style>
+    
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <div id="loading-text">Carregando ambiente 3D...</div>
+    </div>
+
+    <!-- TELA INICIAL ATUALIZADA -->
+    <div id="start-overlay">
+        <div class="welcome-card">
+            <!-- A imagem da logo. Certifique-se de que o nome do arquivo corresponde a este src -->
+            <img src="logo.jpeg" alt="Eloá Ribeiro Arquitetura e Urbanismo">
+            <h1>Seja bem-vindo ao<br>Tour Virtual</h1>
+            <p>by Eloá Ribeiro</p>
+            <button class="start-btn">Iniciar o Tour</button>
+        </div>
+    </div>
+
+    <div id="crosshair"></div>
+    
+    <div class="interaction-prompt" id="interaction-prompt">Pressione 'E' para interagir</div>
+
+    <div id="hud">
+        <b>Controles Desktop:</b><br>
+        WASD: Mover-se<br>
+        Mouse: Olhar ao redor<br>
+        Shift: Correr<br>
+        Espaço: Pular<br>
+        E: Interagir
+    </div>
+
+    <div id="mobile-controls">
+        <div id="zone-left" class="touch-zone"></div>
+        <div id="zone-right" class="touch-zone"></div>
+        <div id="joystick-base"><div id="joystick-stick"></div></div>
+        <div id="btn-jump-mobile">PULO</div>
+        <div id="btn-interact-mobile">AÇÃO</div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+        const EYE_HEIGHT = 1.65; 
+        const WALKING_SPEED = 0.5; 
+        const RUNNING_SPEED = 1.0;
+        const GRAVITY = 25.0; 
+        const JUMP_FORCE = 8.0; 
+        const INTERACTION_DISTANCE = 2.5; 
+        const PLAYER_RADIUS = 0.3; 
+
+        let scene, camera, renderer, controls;
+        let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let isRunning = false, canJump = false; 
+        
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        let prevTime = performance.now();
+
+        const collidableObjects = [];
+        const interactiveDoors = [];
+        const raycaster = new THREE.Raycaster();
+        let currentTargetDoor = null;
+
+        let touchMoveID = null, touchLookID = null;
+        let joyBaseX = 0, joyBaseY = 0;
+        let lookPrevX = 0, lookPrevY = 0;
+        let pitch = 0, yaw = 0;
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); 
+            scene.fog = new THREE.Fog(0x87CEEB, 0, 50);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, EYE_HEIGHT, 5);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            setupControls();
+            loadModel();
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function setupControls() {
+            const startOverlay = document.getElementById('start-overlay');
+            const startBtn = document.querySelector('.start-btn');
+            const hud = document.getElementById('hud');
+            const crosshair = document.getElementById('crosshair');
+            const mobileControls = document.getElementById('mobile-controls');
+
+            if (isMobile) {
+                setupMobileTouch();
+                
+                // Lógica de iniciar no mobile
+                startBtn.addEventListener('click', () => {
+                    startOverlay.style.display = 'none';
+                    mobileControls.style.display = 'block';
+                    crosshair.style.display = 'block';
+                });
+            } else {
+                controls = new PointerLockControls(camera, document.body);
+                
+                // Lógica de iniciar no PC
+                startBtn.addEventListener('click', () => controls.lock());
+                
+                controls.addEventListener('lock', () => { 
+                    startOverlay.style.display = 'none';
+                    hud.style.display = 'block';
+                    crosshair.style.display = 'block';
+                });
+                
+                controls.addEventListener('unlock', () => { 
+                    startOverlay.style.display = 'flex';
+                    hud.style.display = 'none';
+                    crosshair.style.display = 'none';
+                });
+
+                document.addEventListener('keydown', onKeyDown);
+                document.addEventListener('keyup', onKeyUp);
+            }
+        }
+
+        function loadModel() {
+            const loader = new GLTFLoader();
+            const modelPath = 'projeto_banca_circular.glb'; 
+
+            loader.load(
+                modelPath,
+                (gltf) => {
+                    const model = gltf.scene;
+                    scene.add(model);
+                    model.traverse((node) => {
+                        if (node.isMesh) {
+                            node.castShadow = true;
+                            node.receiveShadow = true;
+                            collidableObjects.push(node);
+                            if (node.name.toLowerCase().includes('porta') || node.name.toLowerCase().includes('door')) {
+                                setupDoor(node);
+                            }
+                        }
+                    });
+                    hideLoadingScreen();
+                },
+                (xhr) => {
+                    const percent = (xhr.loaded / xhr.total * 100);
+                    document.getElementById('loading-text').innerText = `Carregando modelo: ${Math.round(percent)}%`;
+                },
+                (error) => {
+                    createFallbackScene();
+                    hideLoadingScreen();
+                }
+            );
+        }
+
+        function hideLoadingScreen() {
+            const loadingScreen = document.getElementById('loading-screen');
+            loadingScreen.style.opacity = '0';
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+                // Mostra a tela inicial bonita com a logo após o mundo 3D carregar no fundo
+                document.getElementById('start-overlay').style.display = 'flex';
+            }, 500);
+        }
+
+        function createFallbackScene() {
+            const floorGeo = new THREE.PlaneGeometry(30, 30);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+            const boxMat = new THREE.MeshStandardMaterial({ color: 0x8a8a8a });
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.set(0, 1, -5);
+            box.castShadow = true;
+            scene.add(box);
+            collidableObjects.push(box);
+        }
+
+        function setupDoor(doorObject) {
+            doorObject.userData = { isDoor: true, isOpen: false, closedRotation: doorObject.rotation.y, openRotation: doorObject.rotation.y + Math.PI / 2 };
+            interactiveDoors.push(doorObject);
+        }
+
+        function interact() {
+            if (currentTargetDoor) {
+                const data = currentTargetDoor.userData;
+                data.isOpen = !data.isOpen;
+            }
+        }
+
+        function onKeyDown(event) {
+            switch (event.code) {
+                case 'ArrowUp': case 'KeyW': moveForward = true; break;
+                case 'ArrowLeft': case 'KeyA': moveLeft = true; break;
+                case 'ArrowDown': case 'KeyS': moveBackward = true; break;
+                case 'ArrowRight': case 'KeyD': moveRight = true; break;
+                case 'ShiftLeft': case 'ShiftRight': isRunning = true; break;
+                case 'KeyE': interact(); break;
+                case 'Space': if (canJump === true) { velocity.y += JUMP_FORCE; canJump = false; } break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.code) {
+                case 'ArrowUp': case 'KeyW': moveForward = false; break;
+                case 'ArrowLeft': case 'KeyA': moveLeft = false; break;
+                case 'ArrowDown': case 'KeyS': moveBackward = false; break;
+                case 'ArrowRight': case 'KeyD': moveRight = false; break;
+                case 'ShiftLeft': case 'ShiftRight': isRunning = false; break;
+            }
+        }
+
+        function setupMobileTouch() {
+            const zoneLeft = document.getElementById('zone-left');
+            const zoneRight = document.getElementById('zone-right');
+            const joyBase = document.getElementById('joystick-base');
+            const joyStick = document.getElementById('joystick-stick');
+            
+            zoneLeft.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.changedTouches[0];
+                touchMoveID = touch.identifier;
+                joyBase.style.display = 'block';
+                joyBase.style.left = (touch.clientX - 50) + 'px';
+                joyBase.style.top = (touch.clientY - 50) + 'px';
+                joyBaseX = touch.clientX; joyBaseY = touch.clientY;
+            });
+
+            zoneLeft.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === touchMoveID) {
+                        const touch = e.changedTouches[i];
+                        let dx = touch.clientX - joyBaseX;
+                        let dy = touch.clientY - joyBaseY;
+                        const distance = Math.min(50, Math.sqrt(dx * dx + dy * dy));
+                        const angle = Math.atan2(dy, dx);
+                        
+                        joyStick.style.transform = `translate(calc(-50% + ${Math.cos(angle) * distance}px), calc(-50% + ${Math.sin(angle) * distance}px))`;
+                        const normX = (Math.cos(angle) * distance) / 50;
+                        const normY = (Math.sin(angle) * distance) / 50;
+                        moveRight = normX > 0.2; moveLeft = normX < -0.2;
+                        moveBackward = normY > 0.2; moveForward = normY < -0.2;
+                    }
+                }
+            });
+
+            const resetJoy = (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === touchMoveID) {
+                        touchMoveID = null; joyBase.style.display = 'none';
+                        joyStick.style.transform = 'translate(-50%, -50%)';
+                        moveForward = moveBackward = moveLeft = moveRight = false;
+                    }
+                }
+            };
+            zoneLeft.addEventListener('touchend', resetJoy); zoneLeft.addEventListener('touchcancel', resetJoy);
+
+            zoneRight.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const touch = e.changedTouches[0];
+                touchLookID = touch.identifier;
+                lookPrevX = touch.clientX; lookPrevY = touch.clientY;
+                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                euler.setFromQuaternion(camera.quaternion);
+                yaw = euler.y; pitch = euler.x;
+            });
+
+            zoneRight.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === touchLookID) {
+                        const touch = e.changedTouches[i];
+                        yaw -= (touch.clientX - lookPrevX) * 0.005;
+                        pitch -= (touch.clientY - lookPrevY) * 0.005;
+                        pitch = Math.max(-Math.PI/2 + 0.1, Math.min(Math.PI/2 - 0.1, pitch));
+                        camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
+                        lookPrevX = touch.clientX; lookPrevY = touch.clientY;
+                    }
+                }
+            });
+
+            const resetLook = (e) => { for (let i = 0; i < e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === touchLookID) touchLookID = null; } };
+            zoneRight.addEventListener('touchend', resetLook); zoneRight.addEventListener('touchcancel', resetLook);
+
+            document.getElementById('btn-interact-mobile').addEventListener('touchstart', (e) => { e.preventDefault(); interact(); });
+            document.getElementById('btn-jump-mobile').addEventListener('touchstart', (e) => { e.preventDefault(); if (canJump) { velocity.y += JUMP_FORCE; canJump = false; } });
+        }
+
+        function checkCollisions(nextPosition) {
+            if (collidableObjects.length === 0) return true;
+            const currentPos = camera.position.clone(); currentPos.y -= (EYE_HEIGHT / 2);
+            const targetPos = nextPosition.clone(); targetPos.y -= (EYE_HEIGHT / 2);
+            const dirVector = new THREE.Vector3().subVectors(targetPos, currentPos);
+            const distanceToMove = dirVector.length();
+            if (distanceToMove === 0) return true;
+            dirVector.normalize();
+            raycaster.set(currentPos, dirVector);
+            const intersects = raycaster.intersectObjects(collidableObjects, true);
+            return !(intersects.length > 0 && intersects[0].distance < (distanceToMove + PLAYER_RADIUS));
+        }
+
+        function checkInteraction() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(collidableObjects, true);
+            currentTargetDoor = null;
+            const prompt = document.getElementById('interaction-prompt');
+
+            if (intersects.length > 0 && intersects[0].distance <= INTERACTION_DISTANCE) {
+                let node = intersects[0].object;
+                while (node) {
+                    if (node.userData && node.userData.isDoor) {
+                        currentTargetDoor = node;
+                        prompt.style.display = 'block';
+                        prompt.innerText = isMobile ? 'Toque em AÇÃO para interagir' : "Pressione 'E' para interagir";
+                        return;
+                    }
+                    node = node.parent;
+                }
+            }
+            prompt.style.display = 'none';
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = performance.now();
+            const delta = (time - prevTime) / 1000;
+
+            if ((!isMobile && controls && controls.isLocked) || (isMobile && document.getElementById('start-overlay').style.display === 'none')) {
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+                velocity.y -= GRAVITY * delta;
+
+                direction.z = Number(moveForward) - Number(moveBackward);
+                direction.x = Number(moveRight) - Number(moveLeft);
+                direction.normalize();
+
+                const speed = isRunning ? RUNNING_SPEED : WALKING_SPEED;
+                if (moveForward || moveBackward) velocity.z -= direction.z * 100.0 * speed * delta;
+                if (moveLeft || moveRight) velocity.x -= direction.x * 100.0 * speed * delta;
+
+                const nextPosX = camera.position.clone();
+                if (!isMobile) {
+                    controls.moveRight(-velocity.x * delta); nextPosX.copy(camera.position); controls.moveRight(velocity.x * delta);
+                } else {
+                    nextPosX.add(new THREE.Vector3(1,0,0).applyEuler(new THREE.Euler(0, yaw, 0)).multiplyScalar(velocity.x * delta));
+                }
+                if (checkCollisions(nextPosX)) { if (!isMobile) controls.moveRight(-velocity.x * delta); else camera.position.copy(nextPosX); }
+
+                const nextPosZ = camera.position.clone();
+                if (!isMobile) {
+                    controls.moveForward(-velocity.z * delta); nextPosZ.copy(camera.position); controls.moveForward(velocity.z * delta);
+                } else {
+                    nextPosZ.add(new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(0, yaw, 0)).multiplyScalar(-velocity.z * delta));
+                }
+                if (checkCollisions(nextPosZ)) { if (!isMobile) controls.moveForward(-velocity.z * delta); else camera.position.copy(nextPosZ); }
+                
+                camera.position.y += velocity.y * delta;
+                if (camera.position.y < EYE_HEIGHT) { velocity.y = 0; camera.position.y = EYE_HEIGHT; canJump = true; }
+
+                checkInteraction();
+            }
+
+            interactiveDoors.forEach(door => {
+                const targetRot = door.userData.isOpen ? door.userData.openRotation : door.userData.closedRotation;
+                door.rotation.y += (targetRot - door.rotation.y) * 5 * delta;
+            });
+
+            prevTime = time;
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
