@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Tour Virtual 3D - Arquitetura</title>
     <style>
+        /* Correção da barra preta e espaçamentos */
         html, body {
             margin: 0;
             padding: 0;
@@ -49,14 +50,14 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* TELA INICIAL (Boas-vindas) */
+        /* Tela Inicial de Boas-Vindas (com Blur) */
         #start-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.4); /* Fundo escurecido translúcido */
-            backdrop-filter: blur(10px); /* Efeito embaçado no projeto 3D */
-            -webkit-backdrop-filter: blur(10px); /* Suporte para Safari */
-            display: none; /* Só aparece após o loading */
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: none; 
             justify-content: center;
             align-items: center;
             z-index: 50;
@@ -76,7 +77,7 @@
         .welcome-card img {
             width: 150px;
             height: 150px;
-            border-radius: 50%; /* Deixa a logo redonda */
+            border-radius: 50%;
             object-fit: cover;
             margin-bottom: 20px;
             border: 1px solid #eaeaea;
@@ -242,10 +243,8 @@
         <div id="loading-text">Carregando ambiente 3D...</div>
     </div>
 
-    <!-- TELA INICIAL ATUALIZADA -->
     <div id="start-overlay">
         <div class="welcome-card">
-            <!-- A imagem da logo. Certifique-se de que o nome do arquivo corresponde a este src -->
             <img src="logo.jpeg" alt="Eloá Ribeiro Arquitetura e Urbanismo">
             <h1>Seja bem-vindo ao<br>Tour Virtual</h1>
             <p>by Eloá Ribeiro</p>
@@ -279,6 +278,7 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
+        // Configurações Principais
         const EYE_HEIGHT = 1.65; 
         const WALKING_SPEED = 0.5; 
         const RUNNING_SPEED = 1.0;
@@ -350,7 +350,6 @@
             if (isMobile) {
                 setupMobileTouch();
                 
-                // Lógica de iniciar no mobile
                 startBtn.addEventListener('click', () => {
                     startOverlay.style.display = 'none';
                     mobileControls.style.display = 'block';
@@ -359,7 +358,6 @@
             } else {
                 controls = new PointerLockControls(camera, document.body);
                 
-                // Lógica de iniciar no PC
                 startBtn.addEventListener('click', () => controls.lock());
                 
                 controls.addEventListener('lock', () => { 
@@ -381,23 +379,27 @@
 
         function loadModel() {
             const loader = new GLTFLoader();
-            const modelPath = 'projeto.glb';
+            const modelPath = 'projeto.glb'; // Nome atualizado
 
             loader.load(
                 modelPath,
                 (gltf) => {
                     const model = gltf.scene;
                     scene.add(model);
+                    
+                    // Passo 1: Configurar malhas e colisões
                     model.traverse((node) => {
                         if (node.isMesh) {
                             node.castShadow = true;
                             node.receiveShadow = true;
                             collidableObjects.push(node);
-                            if (node.name.toLowerCase().includes('porta') || node.name.toLowerCase().includes('door')) {
-                                setupDoor(node);
-                            }
                         }
                     });
+
+                    // Passo 2: Portas (pivô na dobradiça, girando no eixo vertical do MUNDO)
+                    model.updateMatrixWorld(true);
+                    findDoorRoots(model).forEach(setupDoor);
+
                     hideLoadingScreen();
                 },
                 (xhr) => {
@@ -416,7 +418,6 @@
             loadingScreen.style.opacity = '0';
             setTimeout(() => {
                 loadingScreen.style.display = 'none';
-                // Mostra a tela inicial bonita com a logo após o mundo 3D carregar no fundo
                 document.getElementById('start-overlay').style.display = 'flex';
             }, 500);
         }
@@ -438,15 +439,105 @@
             collidableObjects.push(box);
         }
 
-        function setupDoor(doorObject) {
-            doorObject.userData = { isDoor: true, isOpen: false, closedRotation: doorObject.rotation.y, openRotation: doorObject.rotation.y + Math.PI / 2 };
-            interactiveDoors.push(doorObject);
+        // ===== PORTAS =====
+        const DOOR_OPEN_ANGLE = Math.PI / 2;
+        // Se alguma porta abrir pelo lado errado da dobradiça, force aqui pelo nome do nó:
+        // { 'porta_sala': { hinge: 'max' } }   hinge: 'min' | 'max'  (ponta da porta onde fica a dobradiça)
+        const DOOR_OVERRIDES = {};
+        const isDoorName = (n) => /porta|door/i.test(n.name || '');
+
+        // Acha o nó de CADA porta. Se um grupo "Portas" contém várias portas, desce até elas
+        // (antes o grupo inteiro girava em torno da origem do modelo e as portas "teleportavam").
+        function findDoorRoots(root) {
+            const roots = [];
+            const outerGroups = (node) => {
+                const out = [];
+                node.children.forEach(ch => {
+                    if (!ch.isMesh && isDoorName(ch)) out.push(ch);
+                    else out.push(...outerGroups(ch));
+                });
+                return out;
+            };
+            const visit = (node) => {
+                node.children.slice().forEach(ch => {
+                    if (isDoorName(ch)) {
+                        const inner = ch.isMesh ? [] : outerGroups(ch);
+                        if (inner.length >= 2) visit(ch);   // contêiner de várias portas
+                        else roots.push(ch);
+                    } else visit(ch);
+                });
+            };
+            visit(root);
+            return roots;
+        }
+
+        function setupDoor(door) {
+            const parent = door.parent;
+            if (!parent) return;
+            const box = new THREE.Box3().setFromObject(door);
+            if (box.isEmpty()) return;
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const origin = door.getWorldPosition(new THREE.Vector3());
+            const ov = DOOR_OVERRIDES[door.name] || {};
+
+            // A origem do nó serve de dobradiça? Só se estiver sobre a porta e longe do centro dela.
+            const dx = Math.max(box.min.x - origin.x, 0, origin.x - box.max.x);
+            const dy = Math.max(box.min.y - origin.y, 0, origin.y - box.max.y);
+            const dz = Math.max(box.min.z - origin.z, 0, origin.z - box.max.z);
+            const insideBox = Math.hypot(dx, dy, dz) < 0.15;
+            const nearCenter = Math.hypot(origin.x - center.x, origin.z - center.z) < 0.25 * Math.max(size.x, size.z);
+            let hinge;
+            if (insideBox && !nearCenter && !ov.hinge) {
+                hinge = origin.clone();
+            } else {
+                // Origem fora da porta (ex.: 0,0,0) ou no meio dela: usa uma ponta da caixa da porta
+                hinge = center.clone();
+                const side = ov.hinge === 'max' ? 1 : -1;
+                if (size.x >= size.z) hinge.x = side < 0 ? box.min.x : box.max.x;
+                else hinge.z = side < 0 ? box.min.z : box.max.z;
+                console.warn('[Porta] "' + door.name + '": origem do nó não está na dobradiça; usando a ponta da porta. ' +
+                             'Se abrir pelo lado errado, use DOOR_OVERRIDES.');
+            }
+
+            // Pivô na dobradiça; a porta vira filha dele mantendo a posição no mundo
+            const pivot = new THREE.Group();
+            pivot.name = door.name + '_pivot';
+            parent.add(pivot);
+            pivot.position.copy(parent.worldToLocal(hinge.clone()));
+            pivot.updateMatrixWorld(true);
+            pivot.attach(door);
+
+            // Eixo vertical do mundo, expresso no espaço local do pai (ignora rotações do export Z-up)
+            const pq = new THREE.Quaternion();
+            parent.getWorldQuaternion(pq);
+            const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(pq.invert()).normalize();
+
+            const leaf = new THREE.Vector3(center.x - hinge.x, 0, center.z - hinge.z); // dobradiça -> folha
+            door.userData.isDoor = true;
+            door.userData.isOpen = false;
+            door.userData.pivot = pivot;
+            door.userData.axis = axis;
+            door.userData.hinge = hinge;
+            door.userData.leaf = leaf;
+            door.userData.angle = 0;
+            door.userData.targetAngle = 0;
+            interactiveDoors.push(door);
         }
 
         function interact() {
             if (currentTargetDoor) {
                 const data = currentTargetDoor.userData;
                 data.isOpen = !data.isOpen;
+                if (data.isOpen) {
+                    // Abre para o lado oposto ao de quem está interagindo
+                    const L = data.leaf;
+                    const side = (camera.position.x - data.hinge.x) * L.z + (camera.position.z - data.hinge.z) * (-L.x);
+                    const dir = (L.lengthSq() < 1e-4) ? 1 : (side > 0 ? -1 : 1);
+                    data.targetAngle = dir * DOOR_OPEN_ANGLE;
+                } else {
+                    data.targetAngle = 0;
+                }
             }
         }
 
@@ -478,6 +569,7 @@
             const joyBase = document.getElementById('joystick-base');
             const joyStick = document.getElementById('joystick-stick');
             
+            // Movimento
             zoneLeft.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 const touch = e.changedTouches[0];
@@ -502,10 +594,9 @@
                         const normX = (Math.cos(angle) * distance) / 50;
                         const normY = (Math.sin(angle) * distance) / 50;
                         
-                        // Eixo X invertido para corrigir o movimento
+                        // Joystick Mobile invertido corrigido
                         moveRight = normX < -0.2; 
                         moveLeft = normX > 0.2;
-                        
                         moveBackward = normY > 0.2; 
                         moveForward = normY < -0.2;
                     }
@@ -523,6 +614,7 @@
             };
             zoneLeft.addEventListener('touchend', resetJoy); zoneLeft.addEventListener('touchcancel', resetJoy);
 
+            // Câmera
             zoneRight.addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 const touch = e.changedTouches[0];
@@ -550,6 +642,7 @@
             const resetLook = (e) => { for (let i = 0; i < e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === touchLookID) touchLookID = null; } };
             zoneRight.addEventListener('touchend', resetLook); zoneRight.addEventListener('touchcancel', resetLook);
 
+            // Botões de Ação
             document.getElementById('btn-interact-mobile').addEventListener('touchstart', (e) => { e.preventDefault(); interact(); });
             document.getElementById('btn-jump-mobile').addEventListener('touchstart', (e) => { e.preventDefault(); if (canJump) { velocity.y += JUMP_FORCE; canJump = false; } });
         }
@@ -629,8 +722,9 @@
             }
 
             interactiveDoors.forEach(door => {
-                const targetRot = door.userData.isOpen ? door.userData.openRotation : door.userData.closedRotation;
-                door.rotation.y += (targetRot - door.rotation.y) * 5 * delta;
+                const d = door.userData;
+                d.angle += (d.targetAngle - d.angle) * Math.min(5 * delta, 1);
+                d.pivot.quaternion.setFromAxisAngle(d.axis, d.angle);
             });
 
             prevTime = time;
