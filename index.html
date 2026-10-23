@@ -501,8 +501,13 @@
                         joyStick.style.transform = `translate(calc(-50% + ${Math.cos(angle) * distance}px), calc(-50% + ${Math.sin(angle) * distance}px))`;
                         const normX = (Math.cos(angle) * distance) / 50;
                         const normY = (Math.sin(angle) * distance) / 50;
-                        moveRight = normX > 0.2; moveLeft = normX < -0.2;
-                        moveBackward = normY > 0.2; moveForward = normY < -0.2;
+                        
+                        // Eixo X invertido para corrigir o movimento
+                        moveRight = normX < -0.2; 
+                        moveLeft = normX > 0.2;
+                        
+                        moveBackward = normY > 0.2; 
+                        moveForward = normY < -0.2;
                     }
                 }
             });
